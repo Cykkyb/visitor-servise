@@ -1,0 +1,44 @@
+services:
+  go:
+    container_name: go
+    build:
+      context: ./
+    depends_on:
+      pg:
+       condition: service_healthy
+    volumes:
+      - ./:/app
+      - .env:/app/.env
+    ports:
+      - ${APP_PORT}:${APP_PORT}
+
+  nginx:
+    container_name: nginx
+    image: nginx:latest
+    volumes:
+      - './docker/nginx/conf.d/default.conf.template:/etc/nginx/conf.d/default.conf.template'
+    environment:
+      - SERVER_PORT=${SERVER_PORT}
+      - APP_PORT=${APP_PORT}
+    ports:
+      - ${SERVER_PORT}:80
+    depends_on:
+       go:
+         condition: service_started
+    command: /bin/sh -c "envsubst '$$SERVER_PORT $$APP_PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+
+  pg:
+    image: postgres:16.0
+    container_name: pg
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - '${DB_PORT}:5432'
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 2
